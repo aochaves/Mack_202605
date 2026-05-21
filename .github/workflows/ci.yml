@@ -1,4 +1,5 @@
 name: CI - Integração Contínua
+# Objetivo: Validar e testar o código antes de ir para produção
 
 on:
   push:
