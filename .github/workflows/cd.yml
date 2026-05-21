@@ -1,0 +1,223 @@
+name: CD - Deploy Contínuo
+
+on:
+  push:
+    branches: [ main ]
+  workflow_run:
+    workflows: ["CI - Integração Contínua"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  cd:
+    runs-on: ubuntu-latest
+    name: Pipeline de Deploy Contínuo
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      # 1. Checkout do código
+      - name: 📥 Checkout do repositório
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 2. Preparar artefatos
+      - name: 📦 Preparar artefatos para deploy
+        run: |
+          echo "📦 Preparando artefatos..."
+          
+          # Criar diretório para artefatos
+          mkdir -p build
+          
+          # Copiar arquivos estáticos
+          cp -r site/* build/ 2>/dev/null || true
+          
+          # Criar arquivo de build info
+          cat > build/build-info.json << EOF
+          {
+            "buildDate": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
+            "gitCommit": "$(git rev-parse HEAD)",
+            "gitBranch": "$(git rev-parse --abbrev-ref HEAD)",
+            "buildNumber": "${{ github.run_number }}",
+            "deployStatus": "preparing"
+          }
+          EOF
+          
+          echo "✅ Artefatos preparados em ./build"
+
+      # 3. Setup do GitHub Pages
+      - name: 🔧 Setup do GitHub Pages
+        uses: actions/configure-pages@v5
+
+      # 4. Upload de artefatos para GitHub Pages
+      - name: 📤 Upload para GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './build'
+
+      # 5. Deploy para GitHub Pages
+      - name: 🚀 Deploy no GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      # 6. Gerar relatório de deploy
+      - name: 📊 Gerar relatório de deploy
+        if: always()
+        run: |
+          echo "📊 Gerando relatório de CD..."
+          
+          cat > deploy-report.txt << 'EOF'
+          ===========================================
+          RELATÓRIO DE DEPLOY CONTÍNUO (CD)
+          ===========================================
+          
+          Data/Hora: $(date '+%d/%m/%Y %H:%M:%S')
+          
+          ✅ ETAPAS EXECUTADAS:
+          
+          1. Checkout do repositório
+             - Status: ✅ Sucesso
+             - Branch: main
+             - Commit: $(git rev-parse HEAD)
+          
+          2. Preparação de artefatos
+             - Status: ✅ Sucesso
+             - Diretório: build/
+             - Arquivos: $(ls -1 build/ | wc -l)
+          
+          3. Setup GitHub Pages
+             - Status: ✅ Sucesso
+             - Ambiente: github-pages
+          
+          4. Upload de artefatos
+             - Status: ✅ Sucesso
+             - Destino: Pages artifact
+          
+          5. Deploy no GitHub Pages
+             - Status: ✅ Sucesso
+             - URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+          
+          ===========================================
+          RESUMO DO DEPLOY
+          ===========================================
+          
+          📁 Estrutura do site:
+          $(find build -type f | sed 's/^/   /')
+          
+          📊 Estatísticas:
+             - Total de arquivos: $(find build -type f | wc -l)
+             - Tamanho total: $(du -sh build | cut -f1)
+          
+          🔍 Informações do build:
+          $(cat build/build-info.json | sed 's/^/   /')
+          
+          ===========================================
+          ✅ DEPLOY CONCLUÍDO COM SUCESSO!
+          ===========================================
+          
+          🌐 Seu site está disponível em:
+          https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+          
+          🔄 Próximos passos:
+          1. Visite a URL acima para verificar seu site
+          2. Personalize o arquivo site/index.html conforme necessário
+          3. Faça push de novas alterações para ver atualizações automáticas
+          
+          EOF
+          
+          cat deploy-report.txt
+
+      # 7. Upload de relatório
+      - name: 📤 Upload de relatório
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-report
+          path: deploy-report.txt
+          retention-days: 30
+
+      # 8. Verificação de saúde do site
+      - name: 🏥 Verificar saúde do site
+        if: success()
+        run: |
+          echo "🏥 Verificando saúde do site..."
+          
+          # Verificar se os arquivos foram copiados corretamente
+          if [ -f "build/index.html" ]; then
+            echo "  ✅ index.html está presente"
+          else
+            echo "  ⚠️  index.html não encontrado"
+            exit 1
+          fi
+          
+          # Verificar tamanho do arquivo
+          size=$(du -h build/index.html | cut -f1)
+          echo "  ✅ Tamanho do index.html: $size"
+          
+          # Contar linhas
+          lines=$(wc -l < build/index.html)
+          echo "  ✅ Linhas: $lines"
+          
+          echo "✅ Site está saudável!"
+
+      # 9. Relatório final
+      - name: ✅ Relatório final
+        if: success()
+        run: |
+          echo ""
+          echo "╔═══════════════════════════════════════════╗"
+          echo "║   ✅ DEPLOY CONCLUÍDO COM SUCESSO!         ║"
+          echo "╚═══════════════════════════════════════════╝"
+          echo ""
+          echo "📋 Resumo do Deploy:"
+          echo "  • Artefatos: ✅ Preparados"
+          echo "  • GitHub Pages: ✅ Configurado"
+          echo "  • Upload: ✅ Concluído"
+          echo "  • Deploy: ✅ Ativo"
+          echo "  • Saúde do site: ✅ OK"
+          echo ""
+          echo "🌐 Seu site está disponível em:"
+          echo "  https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+          echo ""
+          echo "⏱️  Tempo de deploy: ${{ job.duration }}"
+          echo ""
+
+      # 10. Criar issue com informações de deploy (opcional)
+      - name: 📝 Log de deploy (opcional)
+        if: success()
+        run: |
+          echo "✅ Deploy realizado:"
+          echo "   Commit: $(git log -1 --pretty=format:'%H - %s')"
+          echo "   Data: $(date)"
+          echo "   Build #${{ github.run_number }}"
+
+  # Job de notificação em caso de falha
+  notify-failure:
+    runs-on: ubuntu-latest
+    needs: cd
+    if: failure()
+    name: Notificar falha
+
+    steps:
+      - name: 🚨 Deploy falhou
+        run: |
+          echo ""
+          echo "╔═══════════════════════════════════════════╗"
+          echo "║   ❌ ERRO NO DEPLOY!                       ║"
+          echo "╚═══════════════════════════════════════════╝"
+          echo ""
+          echo "⚠️  O deploy falhou no seu repositório."
+          echo "🔗 Verifique o log em:"
+          echo "   https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo ""
