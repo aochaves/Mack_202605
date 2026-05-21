@@ -9,4 +9,4 @@ e Deploy Contínuo (CD) usando GitHub Actions.
 
 ## 🚀 Workflows
 - `ci.yml` - Validação, testes e análise
-- `cd.yml` - Deploy no GitHub Pages
+- `cd.yml` - Deploy no GitHub Pages 
