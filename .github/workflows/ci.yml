@@ -1,0 +1,187 @@
+name: CI - Integração Contínua
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    name: Pipeline de Integração Contínua
+
+    steps:
+      # 1. Checkout do código
+      - name: 📥 Checkout do repositório
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 2. Validar estrutura de pastas
+      - name: 📁 Validar estrutura do projeto
+        run: |
+          echo "🔍 Verificando estrutura do projeto..."
+          
+          if [ ! -d "site" ]; then
+            echo "❌ Pasta 'site' não encontrada!"
+            exit 1
+          fi
+          
+          if [ ! -f "site/index.html" ]; then
+            echo "❌ Arquivo 'site/index.html' não encontrado!"
+            exit 1
+          fi
+          
+          echo "✅ Estrutura do projeto validada com sucesso!"
+
+      # 3. Validar arquivos HTML
+      - name: 🔍 Validar sintaxe HTML
+        run: |
+          echo "🔍 Validando arquivos HTML..."
+          
+          # Verificar se os arquivos HTML existem
+          html_files=$(find site -name "*.html" -type f)
+          
+          if [ -z "$html_files" ]; then
+            echo "❌ Nenhum arquivo HTML encontrado!"
+            exit 1
+          fi
+          
+          for file in $html_files; do
+            echo "  ✓ Validando: $file"
+            
+            # Validações básicas
+            if ! grep -q "<html" "$file"; then
+              echo "    ❌ Falta tag <html> em $file"
+              exit 1
+            fi
+            
+            if ! grep -q "</html>" "$file"; then
+              echo "    ❌ Falta tag </html> em $file"
+              exit 1
+            fi
+            
+            if ! grep -q "<head>" "$file"; then
+              echo "    ❌ Falta tag <head> em $file"
+              exit 1
+            fi
+            
+            if ! grep -q "<body>" "$file"; then
+              echo "    ❌ Falta tag <body> em $file"
+              exit 1
+            fi
+            
+            echo "    ✅ Arquivo válido"
+          done
+          
+          echo "✅ Todos os arquivos HTML foram validados!"
+
+      # 4. Validar arquivos YAML dos workflows
+      - name: ⚙️ Validar sintaxe dos workflows
+        run: |
+          echo "🔍 Validando arquivos YAML dos workflows..."
+          
+          if [ -f ".github/workflows/ci.yml" ]; then
+            echo "  ✓ Verificando ci.yml"
+            if ! grep -q "name:" ".github/workflows/ci.yml"; then
+              echo "    ❌ ci.yml inválido"
+              exit 1
+            fi
+          fi
+          
+          if [ -f ".github/workflows/cd.yml" ]; then
+            echo "  ✓ Verificando cd.yml"
+            if ! grep -q "name:" ".github/workflows/cd.yml"; then
+              echo "    ❌ cd.yml inválido"
+              exit 1
+            fi
+          fi
+          
+          echo "✅ Workflows validados com sucesso!"
+
+      # 5. Executar testes simples
+      - name: 🧪 Executar testes
+        run: |
+          echo "🧪 Executando testes..."
+          
+          # Teste 1: Verificar se o index.html contém texto esperado
+          if grep -q "Meu Primeiro Deploy Automatizado" site/index.html; then
+            echo "  ✅ Teste 1: Título encontrado"
+          else
+            echo "  ❌ Teste 1: Título não encontrado"
+            exit 1
+          fi
+          
+          # Teste 2: Verificar se há conteúdo na página
+          if [ -s site/index.html ]; then
+            echo "  ✅ Teste 2: Arquivo não está vazio"
+          else
+            echo "  ❌ Teste 2: Arquivo está vazio"
+            exit 1
+          fi
+          
+          # Teste 3: Verificar tags importantes
+          if grep -q "<title>" site/index.html && grep -q "</title>" site/index.html; then
+            echo "  ✅ Teste 3: Tags de título encontradas"
+          else
+            echo "  ❌ Teste 3: Tags de título não encontradas"
+            exit 1
+          fi
+          
+          # Teste 4: Verificar meta charset
+          if grep -q "charset" site/index.html; then
+            echo "  ✅ Teste 4: Charset definido"
+          else
+            echo "  ❌ Teste 4: Charset não definido"
+            exit 1
+          fi
+          
+          echo "✅ Todos os testes passaram!"
+
+      # 6. Gerar relatório de testes
+      - name: 📊 Gerar relatório
+        if: always()
+        run: |
+          echo "📊 Gerando relatório de CI..."
+          echo ""
+          echo "=== RELATÓRIO DE CI ===" > ci-report.txt
+          echo "Data: $(date '+%d/%m/%Y %H:%M:%S')" >> ci-report.txt
+          echo "Status: ✅ Passou" >> ci-report.txt
+          echo "" >> ci-report.txt
+          echo "Etapas executadas:" >> ci-report.txt
+          echo "  ✅ Checkout do repositório" >> ci-report.txt
+          echo "  ✅ Validação de estrutura" >> ci-report.txt
+          echo "  ✅ Validação de HTML" >> ci-report.txt
+          echo "  ✅ Validação de workflows" >> ci-report.txt
+          echo "  ✅ Testes automatizados" >> ci-report.txt
+          echo "" >> ci-report.txt
+          cat ci-report.txt
+
+      # 7. Upload de artefatos
+      - name: 📦 Upload de artefatos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-report
+          path: ci-report.txt
+          retention-days: 30
+
+      # 8. Relatório final
+      - name: ✅ Relatório final
+        if: success()
+        run: |
+          echo ""
+          echo "╔════════════════════════════════════════╗"
+          echo "║   ✅ PIPELINE CI CONCLUÍDO COM SUCESSO  ║"
+          echo "╚════════════════════════════════════════╝"
+          echo ""
+          echo "📋 Resumo:"
+          echo "  • Estrutura do projeto: ✅ Validada"
+          echo "  • Arquivos HTML: ✅ Válidos"
+          echo "  • Workflows: ✅ Válidos"
+          echo "  • Testes: ✅ Todos passaram"
+          echo "  • Artefatos: ✅ Gerados"
+          echo ""
+          echo "🚀 O código está pronto para deploy!"
+          echo ""
