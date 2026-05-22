@@ -41,3 +41,5 @@ Pipeline de Integração Contínua (CI) e Deploy Contínuo (CD) usando GitHub Ac
 ## 🌐 Site Publicado
 
 Após deploy bem-sucedido, o site fica disponível em:
+
+https://aochaves.github.io/Mack_202605/
